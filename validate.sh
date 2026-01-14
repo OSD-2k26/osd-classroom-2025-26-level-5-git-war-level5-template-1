@@ -1,46 +1,75 @@
 #!/bin/bash
 set -e
 
-EXPECTED="omega_key"
+ARTIFACT="artifact.txt"
 
-# 1. artifact must exist in main
-git checkout main >/dev/null 2>&1
+# Required branches (case-insensitive)
+REQUIRED=("alpha" "beta" "gamma" "main")
 
-[ -f artifact.txt ] || {
-  echo "❌ artifact.txt missing in main"
-  exit 1
-}
+BRANCHES=$(git branch --format='%(refname:short)' | tr '[:upper:]' '[:lower:]')
 
-CONTENT=$(cat artifact.txt | tr '[:upper:]' '[:lower:]')
-[ "$CONTENT" = "$EXPECTED" ] || {
-  echo "❌ artifact content incorrect"
-  exit 1
-}
-
-# 2. artifact must NOT exist in alpha or beta
-for BR in alpha beta; do
-  if git show "$BR:artifact.txt" >/dev/null 2>&1; then
-    echo "❌ artifact.txt still exists in $BR"
+for b in "${REQUIRED[@]}"; do
+  echo "$BRANCHES" | grep -qx "$b" || {
+    echo "❌ Required branch '$b' not found"
     exit 1
-  fi
+  }
 done
 
-# 3. artifact MUST exist in gamma history
-git show gamma:artifact.txt >/dev/null 2>&1 || {
-  echo "❌ artifact never passed through gamma"
+# Helper: commit where artifact is ADDED in a branch
+intro_commit () {
+  git log "$1" --diff-filter=A --pretty=format:%H -- "$ARTIFACT" | tail -n 1
+}
+
+# Artifact must exist in main
+git checkout main >/dev/null 2>&1
+[ -f "$ARTIFACT" ] || {
+  echo "❌ artifact.txt not found in main"
   exit 1
 }
 
-# 4. no merge commits allowed
-if git log --oneline --merges | grep -q .; then
-  echo "❌ Merge commits detected — maze poisoned"
+# Must be created in alpha
+ALPHA_COMMIT=$(intro_commit alpha)
+[ -n "$ALPHA_COMMIT" ] || {
+  echo "❌ artifact not created in alpha"
   exit 1
-fi
+}
 
-# 5. must have at least 4 branches
-BRANCH_COUNT=$(git branch | wc -l)
-[ "$BRANCH_COUNT" -ge 4 ] || {
-  echo "❌ Not enough branches created"
+# Must appear in beta, gamma, main
+BETA_COMMIT=$(intro_commit beta)
+GAMMA_COMMIT=$(intro_commit gamma)
+MAIN_COMMIT=$(intro_commit main)
+
+for c in "$BETA_COMMIT" "$GAMMA_COMMIT" "$MAIN_COMMIT"; do
+  [ -n "$c" ] || {
+    echo "❌ artifact missing in one or more branches"
+    exit 1
+  }
+done
+
+# ❗ Cherry-pick validation: patches must be IDENTICAL
+PATCH_ALPHA=$(git show "$ALPHA_COMMIT" --pretty=format: -- "$ARTIFACT")
+PATCH_BETA=$(git show "$BETA_COMMIT" --pretty=format: -- "$ARTIFACT")
+PATCH_GAMMA=$(git show "$GAMMA_COMMIT" --pretty=format: -- "$ARTIFACT")
+PATCH_MAIN=$(git show "$MAIN_COMMIT" --pretty=format: -- "$ARTIFACT")
+
+[ "$PATCH_ALPHA" = "$PATCH_BETA" ] || {
+  echo "❌ alpha → beta not cherry-picked"
+  exit 1
+}
+
+[ "$PATCH_BETA" = "$PATCH_GAMMA" ] || {
+  echo "❌ beta → gamma not cherry-picked"
+  exit 1
+}
+
+[ "$PATCH_GAMMA" = "$PATCH_MAIN" ] || {
+  echo "❌ gamma → main not cherry-picked"
+  exit 1
+}
+
+# No merges allowed
+git log --merges -- "$ARTIFACT" | grep . && {
+  echo "❌ merge used (not allowed)"
   exit 1
 }
 
