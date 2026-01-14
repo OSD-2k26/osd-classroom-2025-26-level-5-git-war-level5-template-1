@@ -1,14 +1,27 @@
-name: Git CTF Level 5 validator
+name: Git CTF Level Ω Validator
 
-on: [push]
+on:
+  push:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository (FULL HISTORY)
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: main
 
-      - run: chmod +x validate.sh
-      - run: ./validate.sh
+      - name: Fetch ALL branches
+        run: |
+          git fetch --all
+          git branch -a
+
+      - name: Make validator executable
+        run: chmod +x validate.sh
+
+      - name: Run validation
+        run: ./validate.sh
