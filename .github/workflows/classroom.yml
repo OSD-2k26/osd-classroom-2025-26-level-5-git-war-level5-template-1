@@ -1,17 +1,20 @@
-name: Git CTF Level Ω Validator
-
-on:
-  push:
+name: Git CTF Level 5 Validator
+on: [push]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout full history
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Updated to v4
         with:
           fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          # This ensures the runner treats 'main' as a real branch it can see
+          git config --global user.email "ctf@github.com"
+          git config --global user.name "CTF Validator"
 
       - name: Make validator executable
         run: chmod +x validate.sh
