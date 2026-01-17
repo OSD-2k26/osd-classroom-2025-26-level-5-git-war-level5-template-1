@@ -6,9 +6,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout full history
-        uses: actions/checkout@v4 # Updated to v4
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main  # Force the runner to start on main
 
       - name: Configure Git
         run: |
